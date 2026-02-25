@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpg" href="/sssdfg.jpg" />
+    <link rel="stylesheet" type="text/css" href="src/style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Collision Detection</title>
+  </head>
+  <body>
+    <div class="hud">
+      <div id="fps" class="hud-item">FPS: 0</div>
+    </div>
+
+    <div class="canvas-container">
+      <div class="controls">
+        <div class="control-group">
+          <label for="amountRange">
+            Amount:
+            <input
+              id="amountRange"
+              type="range"
+              step="10"
+              min="0"
+              max="8000"
+              value="30"
+            />
+            <span id="amountValue">30</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Size:
+            <input
+              id="sizeRange"
+              type="range"
+              step="1"
+              min="1"
+              max="100"
+              value="10"
+            />
+            <span id="sizeValue">30</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Speed min:
+            <input
+              id="speedMinRange"
+              type="range"
+              min="0"
+              step="10"
+              max="1000"
+              value="30"
+            />
+            <span id="speedMinValue">30</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Speed max:
+            <input
+              id="speedMaxRange"
+              type="range"
+              step="10"
+              min="0"
+              max="1000"
+              value="140"
+            />
+            <span id="speedMaxValue">140</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Angular min:
+            <input
+              id="angularMinRange"
+              type="range"
+              step="10"
+              min="0"
+              max="1000"
+              value="30"
+            />
+            <span id="angularMinValue">30</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Angular max:
+            <input
+              id="angularMaxRange"
+              type="range"
+              step="10"
+              min="0"
+              max="1000"
+              value="140"
+            />
+            <span id="angularMaxValue">140</span>
+          </label>
+        </div>
+
+        <button id="applyBtn">Apply</button>
+        <button id="stopBtn" class="standalone-btn">Stop</button>
+      </div>
+
+      <canvas id="game"></canvas>
+    </div>
+
+    <script type="module" src="/src/index.js"></script>
+  </body>
+</html>
