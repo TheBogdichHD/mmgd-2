@@ -10,7 +10,15 @@
   <body>
     <div class="hud">
       <div id="fps" class="hud-item">FPS: 0</div>
+      <div id="pairChecks" class="hud-item">Pair checks/tick: 0</div>
+      <div id="resolvedCollisions" class="hud-item">
+        Collisions resolved/tick: 0
+      </div>
     </div>
+
+    <button id="toggleUiBtn" class="ui-toggle-btn" type="button">
+      Hide UI
+    </button>
 
     <div class="canvas-container">
       <div class="controls">
@@ -22,7 +30,7 @@
               type="range"
               step="10"
               min="0"
-              max="8000"
+              max="15000"
               value="30"
             />
             <span id="amountValue">30</span>
@@ -52,7 +60,7 @@
               type="range"
               min="0"
               step="10"
-              max="1000"
+              max="2000"
               value="30"
             />
             <span id="speedMinValue">30</span>
@@ -67,7 +75,7 @@
               type="range"
               step="10"
               min="0"
-              max="1000"
+              max="2000"
               value="140"
             />
             <span id="speedMaxValue">140</span>
@@ -82,7 +90,7 @@
               type="range"
               step="10"
               min="0"
-              max="1000"
+              max="2000"
               value="30"
             />
             <span id="angularMinValue">30</span>
@@ -97,10 +105,25 @@
               type="range"
               step="10"
               min="0"
-              max="1000"
+              max="2000"
               value="140"
             />
             <span id="angularMaxValue">140</span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <label
+            >Collision budget:
+            <input
+              id="collisionBudgetRange"
+              type="range"
+              step="100"
+              min="100"
+              max="10000"
+              value="2000"
+            />
+            <span id="collisionBudgetValue">5000</span>
           </label>
         </div>
 

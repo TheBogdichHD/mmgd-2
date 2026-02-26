@@ -1,39 +1,80 @@
 import Square from "./square.js";
 import Circle from "./circle.js";
 import Triangle from "./triangle.js";
+import Quadtree from "./quadtree.js";
+import { detectCollision } from "./collision.js";
 
 const canvas = document.getElementById("game");
-const fpsCounter = document.getElementById("fps");
-const stopButton = document.getElementById("stopBtn");
-const applyButton = document.getElementById("applyBtn");
 
-const amountRangeInput = document.getElementById("amountRange");
-const amountValueLabel = document.getElementById("amountValue");
-const sizeRangeInput = document.getElementById("sizeRange");
-const sizeValueLabel = document.getElementById("sizeValue");
+const hud = {
+  fps: document.getElementById("fps"),
+  pairChecks: document.getElementById("pairChecks"),
+  resolvedCollisions: document.getElementById("resolvedCollisions"),
+};
 
-const speedMinRangeInput = document.getElementById("speedMinRange");
-const speedMinValueLabel = document.getElementById("speedMinValue");
-const speedMaxRangeInput = document.getElementById("speedMaxRange");
-const speedMaxValueLabel = document.getElementById("speedMaxValue");
-const angularMinRangeInput = document.getElementById("angularMinRange");
-const angularMinValueLabel = document.getElementById("angularMinValue");
-const angularMaxRangeInput = document.getElementById("angularMaxRange");
-const angularMaxValueLabel = document.getElementById("angularMaxValue");
+const buttons = {
+  toggleUi: document.getElementById("toggleUiBtn"),
+  stop: document.getElementById("stopBtn"),
+  apply: document.getElementById("applyBtn"),
+};
+
+const controls = {
+  amount: {
+    input: document.getElementById("amountRange"),
+    value: document.getElementById("amountValue"),
+  },
+  size: {
+    input: document.getElementById("sizeRange"),
+    value: document.getElementById("sizeValue"),
+  },
+  speedMin: {
+    input: document.getElementById("speedMinRange"),
+    value: document.getElementById("speedMinValue"),
+  },
+  speedMax: {
+    input: document.getElementById("speedMaxRange"),
+    value: document.getElementById("speedMaxValue"),
+  },
+  angularMin: {
+    input: document.getElementById("angularMinRange"),
+    value: document.getElementById("angularMinValue"),
+  },
+  angularMax: {
+    input: document.getElementById("angularMaxRange"),
+    value: document.getElementById("angularMaxValue"),
+  },
+  collisionBudget: {
+    input: document.getElementById("collisionBudgetRange"),
+    value: document.getElementById("collisionBudgetValue"),
+  },
+};
 
 const gameState = {};
 
+const SHAPE_TYPES = [Circle, Square, Triangle];
+const TICK_LENGTH_MS = 16;
+const FRAME_HISTORY_MS = 1000;
+const FPS_UPDATE_RATE = 10;
+const SPAWN_BATCH_SIZE = 30;
+const MAX_CATCH_UP_TICKS = 2;
+
+function setUiHidden(hidden) {
+  gameState.uiHidden = hidden;
+  document.body.classList.toggle("ui-hidden", hidden);
+  buttons.toggleUi.textContent = hidden ? "Show UI" : "Hide UI";
+}
+
 function getSpeedRange() {
   return {
-    min: parseFloat(speedMinRangeInput.value),
-    max: parseFloat(speedMaxRangeInput.value),
+    min: parseFloat(controls.speedMin.input.value),
+    max: parseFloat(controls.speedMax.input.value),
   };
 }
 
 function getAngularSpeedRange() {
   return {
-    min: parseFloat(angularMinRangeInput.value),
-    max: parseFloat(angularMaxRangeInput.value),
+    min: parseFloat(controls.angularMin.input.value),
+    max: parseFloat(controls.angularMax.input.value),
   };
 }
 
@@ -50,70 +91,76 @@ function resumeGame() {
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     run();
-    stopButton.textContent = "Stop";
+    buttons.stop.textContent = "Stop";
   }
 }
 
-stopButton.addEventListener("click", () => {
-  if (gameState.stopCycle) {
-    stopGame(gameState.stopCycle);
-    gameState.stopCycle = null;
-    stopButton.textContent = "Start";
-  } else {
+function syncControlValue(control) {
+  control.value.textContent = control.input.value;
+}
+
+function bindControlValue(control) {
+  control.input.addEventListener("input", () => {
+    syncControlValue(control);
+  });
+}
+
+function bindUiEvents() {
+  buttons.stop.addEventListener("click", () => {
+    if (gameState.stopCycle) {
+      stopGame(gameState.stopCycle);
+      gameState.stopCycle = null;
+      buttons.stop.textContent = "Start";
+      return;
+    }
+
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     run();
-    stopButton.textContent = "Stop";
-  }
-});
+    buttons.stop.textContent = "Stop";
+  });
 
-applyButton.addEventListener("click", async () => {
-  resumeGame();
-  const numToSpawn = amountRangeInput.value;
-  await spawn(numToSpawn);
-});
+  buttons.toggleUi.addEventListener("click", () => {
+    setUiHidden(!gameState.uiHidden);
+  });
 
-amountRangeInput.addEventListener("input", () => {
-  amountValueLabel.textContent = amountRangeInput.value;
-});
+  buttons.apply.addEventListener("click", async () => {
+    resumeGame();
+    await spawn(controls.amount.input.value);
+  });
 
-sizeRangeInput.addEventListener("input", () => {
-  sizeValueLabel.textContent = sizeRangeInput.value;
-});
+  bindControlValue(controls.amount);
+  bindControlValue(controls.size);
+  bindControlValue(controls.speedMin);
+  bindControlValue(controls.speedMax);
+  bindControlValue(controls.angularMin);
+  bindControlValue(controls.angularMax);
+  bindControlValue(controls.collisionBudget);
 
-speedMinRangeInput.addEventListener("input", () => {
-  speedMinValueLabel.textContent = speedMinRangeInput.value;
-});
-
-speedMaxRangeInput.addEventListener("input", () => {
-  speedMaxValueLabel.textContent = speedMaxRangeInput.value;
-});
-
-angularMinRangeInput.addEventListener("input", () => {
-  angularMinValueLabel.textContent = angularMinRangeInput.value;
-});
-
-angularMaxRangeInput.addEventListener("input", () => {
-  angularMaxValueLabel.textContent = angularMaxRangeInput.value;
-});
+  controls.collisionBudget.input.addEventListener("input", () => {
+    gameState.maxCollisionsPerTick = parseInt(
+      controls.collisionBudget.input.value,
+      10,
+    );
+  });
+}
 
 async function spawn(numToSpawn) {
   gameState.figures = [];
 
-  const batchSize = 30;
   const currentSpeedRange = getSpeedRange();
   const currentAngularSpeedRange = getAngularSpeedRange();
+  const targetCount = Number(numToSpawn);
 
-  for (let i = 0; i < numToSpawn; i += batchSize) {
+  for (let i = 0; i < targetCount; i += SPAWN_BATCH_SIZE) {
     const batch = [];
-    for (let j = 0; j < batchSize && i + j < numToSpawn; j++) {
+    for (let j = 0; j < SPAWN_BATCH_SIZE && i + j < targetCount; j++) {
       const x = Math.random() * (canvas.width - 100) + 50;
       const y = Math.random() * (canvas.height - 100) + 50;
 
-      const types = [Circle, Square, Triangle];
-      const Type = types[Math.floor(Math.random() * types.length)];
+      const Type = SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)];
 
-      const figure = new Type(x, y, sizeRangeInput.value, {
+      const figure = new Type(x, y, controls.size.input.value, {
         width: canvas.width,
         height: canvas.height,
       });
@@ -125,8 +172,7 @@ async function spawn(numToSpawn) {
 
       if (figure.type === "square" || figure.type === "triangle") {
         figure.setAngularSpeed(
-          ((randomSign() * Math.PI) / 180) *
-            randomInRange(currentAngularSpeedRange),
+          ((randomSign() * Math.PI) / 180) * randomInRange(currentAngularSpeedRange),
         );
       }
 
@@ -135,7 +181,7 @@ async function spawn(numToSpawn) {
 
     gameState.figures.push(...batch);
 
-    if (i + batchSize < numToSpawn) {
+    if (i + SPAWN_BATCH_SIZE < targetCount) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   }
@@ -143,78 +189,127 @@ async function spawn(numToSpawn) {
 
 function queueUpdates(numTicks) {
   for (let i = 0; i < numTicks; i++) {
-    gameState.lastTick = gameState.lastTick + gameState.tickLength;
-    update(gameState.lastTick);
+    gameState.lastTick += gameState.tickLength;
+    update();
   }
 }
 
-function draw(tFrame) {
-  const context = canvas.getContext("2d");
+function draw() {
+  const context = gameState.ctx;
+  const figures = gameState.figures;
 
   context.clearRect(0, 0, canvas.width, canvas.height);
 
-  gameState.figures.forEach((figure) => {
-    figure.draw(context);
-  });
+  for (let i = 0; i < figures.length; i++) {
+    figures[i].draw(context);
+  }
 }
-function update(tick) {
-  const dt = gameState.tickLength;
-  const gridSize = gameState.gridSize;
-  const buckets = new Map();
 
-  const cachedBounds = gameState.figures.map((figure) => figure.getBounds());
-
-  gameState.figures.forEach((figure, index) => {
-    const bounds = cachedBounds[index];
-    const bucketX = Math.floor(bounds.left / gridSize);
-    const bucketY = Math.floor(bounds.top / gridSize);
-    const key = `${bucketX},${bucketY}`;
-
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push({ figure, index });
-  });
-
-  const activeFigures = gameState.figures.filter(
-    (f, i) => f.collisionCooldown === 0,
+function overlaps(a, b) {
+  return !(
+    a.right < b.left ||
+    a.left > b.right ||
+    a.bottom < b.top ||
+    a.top > b.bottom
   );
+}
 
-  activeFigures.forEach((figure1, idx1) => {
-    const i1 = gameState.figures.indexOf(figure1);
+function update() {
+  const dt = gameState.tickLength;
+
+  const figures = gameState.figures;
+  const totalFigures = figures.length;
+  const cachedBounds = gameState.cachedBounds;
+  cachedBounds.length = totalFigures;
+
+  for (let i = 0; i < totalFigures; i++) {
+    const figure = figures[i];
+    let bounds = cachedBounds[i];
+    if (!bounds) {
+      bounds = { left: 0, right: 0, top: 0, bottom: 0 };
+      cachedBounds[i] = bounds;
+    }
+    figure.fillBounds(bounds);
+  }
+
+  const quadtree = gameState.quadtree;
+
+  gameState.quadtreeItems.length = totalFigures;
+
+  for (let index = 0; index < totalFigures; index++) {
+    let item = gameState.quadtreeItems[index];
+    if (!item) {
+      item = { index: 0, figure: null, bounds: null };
+      gameState.quadtreeItems[index] = item;
+    }
+    item.index = index;
+    item.figure = figures[index];
+    item.bounds = cachedBounds[index];
+  }
+
+  quadtree.rebuild(gameState.quadtreeItems);
+
+  const checkedPairs = gameState.checkedPairs;
+  checkedPairs.clear();
+  let pairChecks = 0;
+  let resolvedCollisions = 0;
+  const maxPairChecksPerTick = gameState.maxCollisionsPerTick;
+  const startIndex = gameState.collisionCursor % Math.max(totalFigures, 1);
+  const queryBuffer = gameState.queryBuffer;
+  const pairKeyMultiplier = totalFigures + 1;
+
+  outer: for (let offset = 0; offset < totalFigures; offset++) {
+    const i1 = (startIndex + offset) % totalFigures;
+    const figure1 = figures[i1];
+
     const bounds1 = cachedBounds[i1];
-    const bucketX1 = Math.floor(bounds1.left / gridSize);
-    const bucketY1 = Math.floor(bounds1.top / gridSize);
+    const candidates = quadtree.query(bounds1, queryBuffer);
 
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const key = `${bucketX1 + dx},${bucketY1 + dy}`;
-        const bucket = buckets.get(key);
-        if (!bucket) continue;
+    for (const candidate of candidates) {
+      const i2 = candidate.index;
+      if (i2 <= i1) continue;
 
-        for (let { figure: figure2, index: i2 } of bucket) {
-          if (figure1 === figure2) continue;
+      const figure2 = candidate.figure;
 
-          if (figure2.collisionCooldown > 0) continue;
+      const pairKey = i1 * pairKeyMultiplier + i2;
+      if (checkedPairs.has(pairKey)) continue;
+      checkedPairs.add(pairKey);
 
-          const bounds2 = cachedBounds[i2];
-          if (
-            bounds1.right < bounds2.left ||
-            bounds1.left > bounds2.right ||
-            bounds1.bottom < bounds2.top ||
-            bounds1.top > bounds2.bottom
-          ) {
-            continue;
-          }
+      const bounds2 = cachedBounds[i2];
+      if (!overlaps(bounds1, bounds2)) {
+        continue;
+      }
 
-          if (figure1.collidesWith(figure2)) {
-            figure1.resolveCollision(figure2);
-            return;
-          }
-        }
+      pairChecks++;
+      if (pairChecks >= maxPairChecksPerTick) {
+        break outer;
+      }
+
+      const dx = figure2.x - figure1.x;
+      const dy = figure2.y - figure1.y;
+      const radiusSum = figure1.getRadius() + figure2.getRadius();
+      if (dx * dx + dy * dy > radiusSum * radiusSum) {
+        continue;
+      }
+
+      const manifold = detectCollision(figure1, figure2);
+      if (manifold) {
+        figure1.resolveCollision(figure2, manifold);
+        resolvedCollisions++;
       }
     }
-  });
+  }
 
-  gameState.figures.forEach((figure) => figure.update(dt));
+  gameState.lastPairChecks = pairChecks;
+  gameState.lastResolvedCollisions = resolvedCollisions;
+
+  if (totalFigures > 0) {
+    gameState.collisionCursor = (startIndex + 1) % totalFigures;
+  }
+
+  for (let i = 0; i < totalFigures; i++) {
+    figures[i].update(dt);
+  }
 }
 
 function run(tFrame) {
@@ -227,8 +322,10 @@ function run(tFrame) {
     const timeSinceTick = tFrame - gameState.lastTick;
     numTicks = Math.floor(timeSinceTick / gameState.tickLength);
   }
+
+  numTicks = Math.min(numTicks, gameState.maxCatchUpTicks);
   queueUpdates(numTicks);
-  draw(tFrame);
+  draw();
   gameState.lastRender = tFrame;
 
   const now = performance.now();
@@ -236,15 +333,18 @@ function run(tFrame) {
 
   while (
     gameState.frameTimes.length > 0 &&
-    gameState.frameTimes[0] <= now - 1000
+    gameState.frameTimes[0] <= now - FRAME_HISTORY_MS
   ) {
     gameState.frameTimes.shift();
   }
 
   gameState.fpsUpdateInterval++;
-  if (gameState.fpsUpdateInterval >= 10) {
+  if (gameState.fpsUpdateInterval >= FPS_UPDATE_RATE) {
     const fps = Math.round(gameState.frameTimes.length);
-    fpsCounter.textContent = `FPS: ${fps}`;
+    hud.fps.textContent = `FPS: ${fps}`;
+    hud.pairChecks.textContent = `Pair checks/tick: ${gameState.lastPairChecks}`;
+    hud.resolvedCollisions.textContent =
+      `Collisions resolved/tick: ${gameState.lastResolvedCollisions}`;
     gameState.fpsUpdateInterval = 0;
   }
 }
@@ -256,23 +356,56 @@ function stopGame(handle) {
 function setup() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+
+  gameState.ctx = canvas.getContext("2d");
   gameState.lastTick = performance.now();
   gameState.lastRender = gameState.lastTick;
-  gameState.tickLength = 16;
+  gameState.tickLength = TICK_LENGTH_MS;
   gameState.frameTimes = [];
   gameState.fpsUpdateInterval = 0;
+  gameState.lastPairChecks = 0;
+  gameState.lastResolvedCollisions = 0;
+  gameState.uiHidden = false;
 
-  amountValueLabel.textContent = amountRangeInput.value;
-  sizeValueLabel.textContent = sizeRangeInput.value;
-  speedMinValueLabel.textContent = speedMinRangeInput.value;
-  speedMaxValueLabel.textContent = speedMaxRangeInput.value;
-  angularMinValueLabel.textContent = angularMinRangeInput.value;
-  angularMaxValueLabel.textContent = angularMaxRangeInput.value;
+  syncControlValue(controls.amount);
+  syncControlValue(controls.size);
+  syncControlValue(controls.speedMin);
+  syncControlValue(controls.speedMax);
+  syncControlValue(controls.angularMin);
+  syncControlValue(controls.angularMax);
+  syncControlValue(controls.collisionBudget);
 
-  gameState.gridSize = parseFloat(sizeRangeInput.value) * 2;
+  gameState.quadtreeConfig = {
+    maxDepth: 7,
+    capacity: 12,
+  };
+  gameState.quadtree = new Quadtree(
+    {
+      left: 0,
+      top: 0,
+      right: canvas.width,
+      bottom: canvas.height,
+    },
+    gameState.quadtreeConfig,
+  );
+  gameState.quadtreeItems = [];
+  gameState.cachedBounds = [];
+  gameState.queryBuffer = [];
+  gameState.checkedPairs = new Set();
+  gameState.maxCatchUpTicks = MAX_CATCH_UP_TICKS;
+  gameState.maxCollisionsPerTick = parseInt(
+    controls.collisionBudget.input.value,
+    10,
+  );
+  gameState.collisionCursor = 0;
 
-  spawn(amountRangeInput.value);
+  hud.pairChecks.textContent = "Pair checks/tick: 0";
+  hud.resolvedCollisions.textContent = "Collisions resolved/tick: 0";
+  setUiHidden(false);
+
+  spawn(controls.amount.input.value);
 }
 
+bindUiEvents();
 setup();
 run();

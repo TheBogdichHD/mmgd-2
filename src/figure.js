@@ -1,3 +1,5 @@
+import { detectCollision } from "./collision.js";
+
 export default class Figure {
   constructor(x, y, size, canvasBounds) {
     this.x = x;
@@ -10,6 +12,7 @@ export default class Figure {
     this.angularVelocity = 0;
     this.type = "base";
     this.collisionCooldown = 0;
+    this._boundsBuffer = { left: 0, right: 0, top: 0, bottom: 0 };
   }
 
   setSpeed(vx, vy) {
@@ -21,51 +24,63 @@ export default class Figure {
     this.angularVelocity = omega;
   }
 
+  applyBoundsResponse(bounds) {
+    if (bounds.left < 0) {
+      this.x += -bounds.left;
+      if (this.vx < 0) this.vx *= -1;
+    } else if (bounds.right > this.canvasBounds.width) {
+      this.x -= bounds.right - this.canvasBounds.width;
+      if (this.vx > 0) this.vx *= -1;
+    }
+
+    if (bounds.top < 0) {
+      this.y += -bounds.top;
+      if (this.vy < 0) this.vy *= -1;
+    } else if (bounds.bottom > this.canvasBounds.height) {
+      this.y -= bounds.bottom - this.canvasBounds.height;
+      if (this.vy > 0) this.vy *= -1;
+    }
+  }
+
   update(dt) {
     const t = dt / 1000;
     this.x += this.vx * t;
     this.y += this.vy * t;
     this.angle += this.angularVelocity * t;
 
-    const bounds = this.getBounds();
-
-    if (bounds.left < 0 || bounds.right > this.canvasBounds.width) {
-      this.vx *= -1;
-    }
-    if (bounds.top < 0 || bounds.bottom > this.canvasBounds.height) {
-      this.vy *= -1;
-    }
+    this.fillBounds(this._boundsBuffer);
+    this.applyBoundsResponse(this._boundsBuffer);
 
     if (this.collisionCooldown > 0) {
       this.collisionCooldown--;
     }
   }
 
-  draw(ctx) {}
+  draw(ctx) { }
 
   collidesWith(other) {
-    const b1 = this.getBounds();
-    const b2 = other.getBounds();
-
-    return !(
-      b1.right < b2.left ||
-      b1.left > b2.right ||
-      b1.bottom < b2.top ||
-      b1.top > b2.bottom
-    );
+    return detectCollision(this, other) !== null;
   }
 
-  resolveCollision(other) {
+  resolveCollision(other, manifold = null) {
+    const computedManifold = manifold || detectCollision(this, other);
+    if (!computedManifold) return;
+
+    const nx = computedManifold.normal.x;
+    const ny = computedManifold.normal.y;
+
+    const overlap = computedManifold.depth;
+    if (overlap > 0) {
+      const slop = 0.01;
+      const percent = 0.8;
+      const correction = Math.max(overlap - slop, 0) * percent * 0.5;
+      this.x -= nx * correction;
+      this.y -= ny * correction;
+      other.x += nx * correction;
+      other.y += ny * correction;
+    }
+
     if (this.collisionCooldown > 0 || other.collisionCooldown > 0) return;
-
-    const dx = other.x - this.x;
-    const dy = other.y - this.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance === 0) return;
-
-    const nx = dx / distance;
-    const ny = dy / distance;
 
     const v1n = this.vx * nx + this.vy * ny;
     const v2n = other.vx * nx + other.vy * ny;
@@ -75,25 +90,28 @@ export default class Figure {
     other.vx += (v1n - v2n) * nx;
     other.vy += (v1n - v2n) * ny;
 
-    const rSum = this.getRadius() + other.getRadius();
-    const overlap = rSum - distance;
-    if (overlap > 0) {
-      const separation = Math.min(overlap / 4, 1);
-      this.x -= nx * separation;
-      this.y -= ny * separation;
-      other.x += nx * separation;
-      other.y += ny * separation;
-    }
-
-    this.collisionCooldown = 5;
-    other.collisionCooldown = 5;
+    this.collisionCooldown = 2;
+    other.collisionCooldown = 2;
   }
 
   getRadius() {
     return this.size / 2;
   }
 
+  getShapeType() {
+    return this.type;
+  }
+
+  getWorldVertices() {
+    return [];
+  }
+
   getBounds() {
-    throw new Error("getBounds must be implemented");
+    this.fillBounds(this._boundsBuffer);
+  }
+
+  fillBounds(out) {
+    throw new Error("fillBounds must be implemented");
   }
 }
+

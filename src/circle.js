@@ -3,7 +3,8 @@ import Figure from "./figure.js";
 export default class Circle extends Figure {
   constructor(x, y, size, canvasBounds) {
     super(x, y, size, canvasBounds);
-    this.radius = size / 2;
+    this.size = Number(size);
+    this.radius = this.size / 2;
     this.type = "circle";
   }
 
@@ -12,13 +13,8 @@ export default class Circle extends Figure {
     this.x += this.vx * t;
     this.y += this.vy * t;
 
-    const bounds = this.getBounds();
-    if (bounds.left < 0 || bounds.right > this.canvasBounds.width) {
-      this.vx *= -1;
-    }
-    if (bounds.top < 0 || bounds.bottom > this.canvasBounds.height) {
-      this.vy *= -1;
-    }
+    this.fillBounds(this._boundsBuffer);
+    this.applyBoundsResponse(this._boundsBuffer);
 
     if (this.collisionCooldown > 0) {
       this.collisionCooldown--;
@@ -27,24 +23,20 @@ export default class Circle extends Figure {
 
   draw(ctx) {
     ctx.fillStyle = "#f87171";
-    ctx.strokeStyle = "#dc2626";
-    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
   }
 
   getRadius() {
     return this.radius;
   }
 
-  getBounds() {
-    return {
-      left: this.x - this.radius,
-      right: this.x + this.radius,
-      top: this.y - this.radius,
-      bottom: this.y + this.radius,
-    };
+  fillBounds(out) {
+    out.left = this.x - this.radius;
+    out.right = this.x + this.radius;
+    out.top = this.y - this.radius;
+    out.bottom = this.y + this.radius;
   }
 }
+

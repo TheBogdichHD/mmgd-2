@@ -1,5 +1,5 @@
 // test-collisions.test.js
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import Square from "./square.js";
 import Circle from "./circle.js";
 import Triangle from "./triangle.js";
@@ -74,13 +74,13 @@ describe("Collision Tests", () => {
 
     it("Touch", () => {
       const circle = new Circle(100, 100, 20, canvasBounds);
-      const triangle = new Triangle(120, 100, 20, canvasBounds);
+      const triangle = new Triangle(110, 100, 20, canvasBounds);
       expect(circle.collidesWith(triangle)).toBe(true);
     });
 
     it("Intersection", () => {
       const circle = new Circle(100, 100, 20, canvasBounds);
-      const triangle = new Triangle(120, 100, 20, canvasBounds);
+      const triangle = new Triangle(105, 100, 20, canvasBounds);
       expect(circle.collidesWith(triangle)).toBe(true);
     });
 
@@ -177,6 +177,33 @@ describe("Collision Tests", () => {
     it("Triangle Inside Triangle", () => {
       const triangle1 = new Triangle(100, 100, 20, canvasBounds);
       const triangle2 = new Triangle(100, 100, 5, canvasBounds);
+      expect(triangle1.collidesWith(triangle2)).toBe(true);
+    });
+  });
+
+  describe("Rotation-aware precision", () => {
+    it("Circle collides with rotated square corner", () => {
+      const square = new Square(100, 100, 40, canvasBounds);
+      square.angle = Math.PI / 4;
+
+      const circle = new Circle(124, 100, 20, canvasBounds);
+      expect(circle.collidesWith(square)).toBe(true);
+    });
+
+    it("Circle misses rotated square when separated", () => {
+      const square = new Square(100, 100, 40, canvasBounds);
+      square.angle = Math.PI / 4;
+
+      const circle = new Circle(150, 100, 20, canvasBounds);
+      expect(circle.collidesWith(square)).toBe(false);
+    });
+
+    it("Rotated triangles collide with overlap", () => {
+      const triangle1 = new Triangle(120, 100, 50, canvasBounds);
+      const triangle2 = new Triangle(145, 100, 50, canvasBounds);
+      triangle1.angle = Math.PI / 6;
+      triangle2.angle = -Math.PI / 6;
+
       expect(triangle1.collidesWith(triangle2)).toBe(true);
     });
   });
